@@ -1,0 +1,54 @@
+// EV1527 Protocol Generator on Arduino Nano
+const int txPin = 8; // GPIO pin to transmit signal
+const uint32_t code = 0x3802063C; // 24-bit EV1527 code
+const int repeats = 4;
+
+// Timing constants (in microseconds)
+const int T = 250;
+const int T0H = T, T0L = 3 * T;
+const int T1H = 3 * T, T1L = T;
+const int TSH = T, TSL = 31 * T;
+
+void setup() {
+  pinMode(txPin, OUTPUT);
+  digitalWrite(txPin, LOW);
+  Serial.begin(9600);
+  Serial.println("EV1527 transmission started...");
+}
+
+void loop() {
+  for (int r = 0; r < repeats; r++) {
+    sendCode(code);
+    sendSync();
+    delay(10); // Small gap between repeats
+  }
+  delay(1000); // Wait before next transmission cycle
+}
+
+void sendCode(uint32_t code) {
+  for (int i = 31; i >= 0; i--) {
+    bool bit = (code >> i) & 1;
+    sendBit(bit);
+  }
+}
+
+void sendBit(bool bit) {
+  if (bit) {
+    digitalWrite(txPin, HIGH);
+    delayMicroseconds(T1H);
+    digitalWrite(txPin, LOW);
+    delayMicroseconds(T1L);
+  } else {
+    digitalWrite(txPin, HIGH);
+    delayMicroseconds(T0H);
+    digitalWrite(txPin, LOW);
+    delayMicroseconds(T0L);
+  }
+}
+
+void sendSync() {
+  digitalWrite(txPin, HIGH);
+  delayMicroseconds(TSH);
+  digitalWrite(txPin, LOW);
+  delayMicroseconds(TSL);
+}
