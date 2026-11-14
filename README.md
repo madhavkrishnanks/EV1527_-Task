@@ -97,7 +97,7 @@ The D8 baseband was connected to the FS1000A transmitter DATA pin. The demodulat
 </p>
 
 ### Receiver Demodulation Characteristics
-- **Edge Latency:** The receiver output lags transmitter transitions by ~25–30 µs due to RF tank charging and envelope filter delay.
+- **Edge Latency:** The receiver output lagged the transmitter by approximately 25–30 µs in the captured setup.
 - **Pulse Width Distortion:** The demodulator stretches HIGH pulses by 25–35 µs (Bit 0 HIGH stretches from 252 µs to 277–290 µs; Bit 1 HIGH stretches from 752–758 µs to 764–798 µs), correspondingly shortening the adjacent LOW pulse while preserving overall bit period (~1.020 ms).
 - **Threshold Decoding:** Because pulse widths vary across the RF link, software decoders must evaluate pulse widths against a midpoint threshold (~500 µs) rather than exact nominal values.
 
@@ -129,7 +129,7 @@ The 12 V learning relay board (Songle SRD-12VDC-SL-C) was evaluated with both th
 
 1. **Factory Pairing:** The board responded immediately to Remote Button A (`0x613718`).
 2. **Learning Procedure:** The learning button was pressed on the relay board, and the Arduino transmitter broadcasting `0x02063C` was held ~30 cm away. The onboard indicator LED confirmed pairing, and the relay contacts switched.
-3. **Causation Verification:** Disconnecting USB power from the Arduino stopped the transmission, causing the relay to open. Reconnecting power resumed transmission, immediately closing the relay contacts.
+3. **Transmission Interruption Test:** Disconnecting USB power stopped the generated transmission and the relay opened. Reconnecting power resumed transmission and the relay responded again.
 4. **Operating Mode:** The relay operated in momentary mode with retriggering: repeated frames arriving every ~42 ms held the relay continuously closed without contact chatter between frames.
 
 ---
@@ -151,7 +151,7 @@ The 12 V learning relay board (Songle SRD-12VDC-SL-C) was evaluated with both th
 ## Evidence & Verification Files
 
 - **Complete Work Log:** [`docs/EV1527_Work_Log.md`](docs/EV1527_Work_Log.md) — Source-of-truth technical log with detailed timing tables.
-- **Detailed Wiki Article:** [`docs/wiki/EV1527-Baseband-Link-Decode-Relay.md`](docs/wiki/EV1527-Baseband-Link-Decode-Relay.md) — 15-section comprehensive writeup.
+- **Detailed Wiki Article:** [`docs/wiki/EV1527-Baseband-Link-Decode-Relay.md`](docs/wiki/EV1527-Baseband-Link-Decode-Relay.md) — 15-section detailed writeup.
 - **Firmware:** [`firmware/ev1527_generator.ino`](firmware/ev1527_generator.ino) — 24-bit generator sketch.
 - **Reference Sketch:** [`reference/Arduino_EV1527_1.txt`](reference/Arduino_EV1527_1.txt) — Original 32-bit reference code.
 - **PulseView Captures:** [`captures/`](captures/) — Native `.sr` sessions (`RX_TX_of_both_boards.sr`, `tx_rx_run1.sr`, `tx_rx_run2.sr`, `tx_rx_run3.sr`, `remote_A.sr`, `remote_B.sr`).

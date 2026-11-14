@@ -99,7 +99,11 @@ The EV1527 protocol encodes data using pulse-width modulation over On-Off Keying
 | Bit 1 | 3t | 1t | 4t | 750 µs HIGH / 250 µs LOW |
 
 - **Constant Bit Length:** Each data bit occupies exactly $4t$ ($1000\ \mu\text{s}$ at $t = 250\ \mu\text{s}$), regardless of whether it is a 0 or 1.
-- **Active Frame Duration:** 24 data bits ($24 \times 4t = 96t$) plus sync ($32t$) equals $128t = 32.0\ \text{ms}$ (nominal).
+- **Data Duration:** $24 \times 4t = 96t = 24.0\ \text{ms}$ at $t = 250\ \mu\text{s}$ (measured at ~24.5 ms at the measured 1.020 ms bit period).
+- **Sync Duration:** $32t = 8.0\ \text{ms}$ ($1t$ HIGH = 250 µs, $31t$ LOW = 7750 µs).
+- **Active Frame Duration:** $96t + 32t = 128t = 32.0\ \text{ms}$ nominal (~32.25 ms with measured pulse overhead).
+- **Post-sync / Repeat Gap:** Approximately 17.8 ms in the implemented firmware because of the additional 10 ms inter-repeat delay ($31t\ \text{LOW} + 10\ \text{ms} = 17.75\ \text{ms}$ nominal, measured 17.81 ms).
+- **Frame Repetition Period:** Active frame duration + inter-repeat delay = $32.0\ \text{ms} + 10.0\ \text{ms} = 42.0\ \text{ms}$ nominal (~42.4 ms measured). Frame duration (32 ms active) is separate from repetition period (42 ms).
 - **Packet Structure:** The 24 bits comprise a 20-bit address field ($C_{19} \dots C_0$) and a 4-bit data field ($D_3 \dots D_0$).
 - **Transmitted Code:** The task specification listed `0x3802063C`. Because EV1527 uses 24 bits, I transmitted the lower 24 bits: `0x02063C` (`0000 0010 0000 0110 0011 1100`).
 
@@ -204,7 +208,7 @@ Three separate dual-channel runs were recorded over 100 ms windows (200 000 samp
 | Bit 1 LOW duration | 254–260 µs | Correspondingly shorter | Total bit period conserved (~1020 µs) |
 | Post-sync LOW gap | 17 810–17 816 µs | 17 810–17 816 µs | Maintained across RF link |
 | Total frame period | ~42.4 ms | ~42.4 ms | Calculated: 24.5 ms data + 7.75 ms sync + 10 ms delay |
-| Edge latency | Reference (0 µs) | ~25–30 µs delay | RF demodulation and receiver filter delay |
+| Edge latency | Reference (0 µs) | ~25–30 µs delay | The receiver output lagged the transmitter by approximately 25–30 µs in the captured setup |
 
 <p align="center">
   <img src="images/la_tx_rx_100ms.png" width="400" alt="Logic analyser TX vs RX over 100 ms" />
@@ -217,13 +221,13 @@ Three separate dual-channel runs were recorded over 100 ms windows (200 000 samp
 <p align="center"><em>Zoomed view of TX_D8 and RX_D7: receiver tracks transmitter pulses with ~25–30 µs edge delay</em></p>
 
 ### Transmission Redundancy Observation
-In `captures/tx_rx_run3.sr`, two of the received frames decoded cleanly to `0x02063C`, while one frame decoded to `0x02031E` due to an RF noise glitch that stretched a short HIGH pulse past the decision threshold. Because the EV1527 protocol contains no checksum or error-correcting code, repeating transmission across multiple frames increases the probability that the receiver detects a valid frame.
+In `captures/tx_rx_run3.sr`, two of the received frames decoded cleanly to `0x02063C`, while one frame decoded to `0x02031E` due to an RF noise glitch that stretched a short HIGH pulse past the decision threshold. Because the protocol has no checksum or error-correcting code, repeated transmission increases the probability of successful reception.
 
 ---
 
 ## 9. Decoding
 
-The captured waveforms were decoded using both manual inspection and software analysis.
+The captured waveform was checked by manual inspection and software decoding.
 
 ### Decoding Rule
 1. Locate the frame boundary by identifying the long post-sync LOW gap (> 3 ms).
@@ -286,11 +290,11 @@ To examine real-world EV1527 characteristics, I silenced the Arduino transmitter
 ### Key Observations
 1. **Address vs Data Fields:** Both remote buttons shared the same 20-bit address (`0x61371`) and differed only in the lower 4 data bits (`1000` vs `0100`).
 2. **Independent Addresses:** The remote address differs from the Arduino's generated address (`0x02063`), which is expected since EV1527 addresses are set per device.
-3. **Oscillator Tolerance:** The remote operated at $t \approx 400\ \mu\text{s}$, while the Arduino ran at $t = 250\ \mu\text{s}$. This demonstrates the oscillator variation inherent in low-cost resistor-set EV1527 oscillators.
+3. **Oscillator Tolerance:** The remote operated at $t \approx 400\ \mu\text{s}$, while the Arduino ran at $t = 250\ \mu\text{s}$. This illustrates typical oscillator variation in resistor-set EV1527 encoders.
 
 ---
 
-## 11. Relay Demonstration
+## 11. Relay Operation
 
 The relay stage was tested using the 12 V single-channel EV1527 learning receiver module (Songle SRD-12VDC-SL-C).
 
@@ -304,20 +308,16 @@ The relay stage was tested using the 12 V single-channel EV1527 learning receive
 | 4 | Disconnected USB power from Arduino | Transmission ceased; relay opened |
 | 5 | Reconnected USB power to Arduino | Transmission resumed; relay clicked closed and held |
 
-The learning relay successfully learned the generated code (`0x02063C`) and responded when the generated frame was transmitted again. The board operated in momentary mode with retriggering: repeated frames arriving every ~42 ms continuously retriggered the internal dropout timer, holding the relay closed without contact chatter between frames, and opening when transmission ceased. Disconnecting and reconnecting transmitter power verified that the relay actively responds to the generated baseband transmission. Both the remote and the Arduino remained stored in the relay's memory and could actuate the board independently.
+The learning relay successfully learned the generated code (`0x02063C`) and responded when the generated frame was transmitted again. The board operated in momentary mode with retriggering: repeated frames arriving every ~42 ms continuously retriggered the internal dropout timer, holding the relay closed without contact chatter between frames. Disconnecting USB power stopped the generated transmission and the relay opened. Reconnecting power resumed transmission and the relay responded again. Both the remote and the Arduino remained stored in the relay's memory and could actuate the board independently.
 
 ---
 
-## 12. Debugging / Failed Experiments
+## 12. Debugging Findings
 
 During the development of this setup, several initial approaches failed before being corrected:
 
-### 1. Frame Length Clarification
-- **What was tried:** The supplied reference sketch (`reference/Arduino_EV1527_1.txt`) contained `for (int i = 31; i >= 0; i--)` to transmit `code = 0x3802063C`.
-- **What was observed:** Logic analyser edge counting showed 32 data pulses (33 pulses total per frame), as shown in `la_32_bits_before_fix.png`.
-- **Why it was invalid:** Standard EV1527 frames contain 24 data bits (25 pulses total).
-- **What was changed:** I adapted the loop to `for (int i = 23; i >= 0; i--)`, sending the low 24 bits (`0x02063C`).
-- **What worked afterwards:** The logic analyser confirmed exactly 25 pulses per frame (`la_25_pulses.png`).
+### 1. Frame-Length Clarification
+The supplied reference sketch iterated over 32 bits (`for (int i = 31; i >= 0; i--)`). Logic-analyser capture showed 32 data pulses (33 total pulses per frame, as shown in `la_32_bits_before_fix.png`), so I adapted the implementation to transmit the 24-bit frame used in this experiment (`for (int i = 23; i >= 0; i--)`, sending the low 24 bits `0x02063C`) and verified 25 pulses per frame (`la_25_pulses.png`).
 
 <p align="center">
   <img src="images/la_32_bits_before_fix.png" width="400" alt="Logic analyser showing 32 data bits before fix" />
