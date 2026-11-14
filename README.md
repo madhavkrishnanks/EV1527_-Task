@@ -1,219 +1,131 @@
-# EV1527 · 433.92 MHz RF Link — Generate, Verify, Decode, Actuate
+# EV1527 · 433.92 MHz RF Link
 
-An Arduino generates a 24-bit EV1527 frame, timing is verified on a Rigol oscilloscope, the frame travels over a 433.92 MHz OOK radio link, and a commercial learning relay responds to it. Every number here was measured. Five real faults were found and fixed along the way — including one in the task's own reference sketch.
+An Arduino Uno generates a 24-bit EV1527-style baseband waveform, verified with a digital oscilloscope and logic analyser. The signal is transmitted via an FS1000A-class 433.92 MHz OOK transmitter, demodulated by an XD-RF-5V receiver, captured on a 2 MHz logic analyser, and decoded in software and by hand. The transmitted code was then learned and actuated by a commercial 12 V learning relay receiver. Measured values are identified where applicable; calculated and nominal values are stated separately.
 
-**Full work log → [`docs/EV1527_Work_Log.md`](docs/EV1527_Work_Log.md) · Wiki → [EV1527 Baseband, RF Link, Decode and Relay](https://github.com/madhavkrishnanks/EV1527_RF_Link/wiki/EV1527-Baseband,-433.92-MHz-Link,-Decode-and-Relay)**
+Detailed work log: [`docs/EV1527_Work_Log.md`](docs/EV1527_Work_Log.md) · Wiki: [EV1527 Baseband, RF Link, Decode and Relay](https://github.com/madhavkrishnanks/EV1527_RF_Link/wiki/EV1527-Baseband,-433.92-MHz-Link,-Decode-and-Relay)
+
+---
+
+## Objective
+
+1. Generate an EV1527 pulse-width-modulated baseband frame on an ATmega328P (Arduino Uno) using GPIO bit-banging.
+2. Verify pulse and frame timing against protocol specifications using an oscilloscope and logic analyser.
+3. Transmit the frame across a 433.92 MHz OOK wireless link, capture the demodulated signal, and decode the received data.
+4. Compare the generated frame against a commercial EV1527 handheld remote and actuate a 12 V learning relay.
 
 ---
 
 ## Hardware
 
-<p align="center">
-  <img src="images/hw_modules.png" width="400" alt="FS1000A transmitter and XD-RF-5V receiver"/>
-  &nbsp;&nbsp;
-  <img src="images/hw_relay.png" width="400" alt="EV1527 learning relay receiver"/>
-</p>
-<p align="center">
-  <em>Left: FS1000A-class transmitter and XD-RF-5V receiver · Right: Songle SRD-12VDC-SL-C learning relay receiver</em>
-</p>
-
-<p align="center">
-  <img src="images/hw_remote.png" width="300" alt="Two-button EV1527 remote"/>
-</p>
-<p align="center">
-  <em>Two-button EV1527 remote supplied with the relay board</em>
-</p>
-
----
-
-## Results at a Glance
-
-| Quantity | Value |
-|---|---|
-| Pulse unit t | 250 µs |
-| Bit 0 timing | 250 µs HIGH · 770 µs LOW |
-| Bit 1 timing | 770 µs HIGH · 250 µs LOW |
-| Bit period | 1.020 ms (4t) |
-| Pulses per frame | 25 (1 sync + 24 data) |
-| Transmitted word | `0x02063C` |
-| Decoded word (TX and RX) | `0x02063C` — identical on both channels |
-| Remote button A | `0x613718` · address `0x61371` · data `1000` |
-| Remote button B | `0x613714` · address `0x61371` · data `0100` |
-| Relay | operates from the generated frame |
-
----
-
-## Signal Chain
-
-```
-Arduino Uno ── D8 ──┬── Rigol DS1054Z CH1       (timing, amplitude)
-                    ├── logic analyser CH0       ("TX_D8")
-                    └── FS1000A transmitter ── 433.92 MHz OOK ──┐
-                                                                 │
-EV1527 learning relay receiver ◄── XD-RF-5V receiver ◄──────────┘
-         │                               │
-     relay contact                DATA ──┴── Arduino D7 / analyser CH1 ("RX_D7")
-```
-
----
-
-## Oscilloscope — Timing Verification
-
-<p align="center">
-  <img src="images/scope_bits.png" width="600" alt="Scope: pulse timing"/>
-</p>
-<p align="center">
-  <em>CH1 on D8 · 500 µs/div · +Width 250.0 µs · −Width 770.0 µs · period 1.020 ms</em>
-</p>
-
-The DS1054Z auto-measure at 500 µs/div gives the pulse widths directly. At coarser timebases the readings are pixel-quantised (200 µs resolution) and cannot be trusted — a fault documented in the work log.
-
-<p align="center">
-  <img src="images/scope_frame.png" width="600" alt="Scope: frame structure"/>
-  &nbsp;&nbsp;
-  <img src="images/scope_25_pulses.png" width="600" alt="Scope: 25 pulses per frame"/>
-</p>
-<p align="center">
-  <em>Left: 10 ms/div — frame bursts with sync gap visible · Right: 5 ms/div — 25 pulses in one complete frame</em>
-</p>
-
----
-
-## Logic Analyser — Before and After the Fix
-
-The task's reference sketch transmits a 32-bit loop, producing 33 pulses per frame instead of 25. The fix is a single-line change: `for (int i = 23; ...)`.
-
-<p align="center">
-  <img src="images/la_32_bits_before_fix.png" width="560" alt="LA: 32 bits before fix"/>
-  &nbsp;&nbsp;
-  <img src="images/la_25_pulses.png" width="560" alt="LA: 25 pulses after fix"/>
-</p>
-<p align="center">
-  <em>Left: 33 pulses (32 data + 1 sync) before the fix · Right: 25 pulses (24 data + 1 sync) after</em>
-</p>
-
----
-
-## RF Link — TX and RX on Two Channels
-
-<p align="center">
-  <img src="images/la_tx_rx_100ms.png" width="700" alt="TX and RX over 100 ms"/>
-</p>
-<p align="center">
-  <em>TX_D8 and RX_D7 · 2 MHz · 100 ms window · two complete frames · 25 pulses each on both channels</em>
-</p>
-
-<p align="center">
-  <img src="images/la_tx_rx_zoom.png" width="700" alt="TX and RX zoomed"/>
-</p>
-<p align="center">
-  <em>Same capture zoomed — the receiver reproduces the frame pulse for pulse, with ~25–30 µs edge lag</em>
-</p>
-
-The receiver stretches each HIGH by roughly 25–35 µs. That is normal for a superheterodyne module with AGC. The decode is `0x02063C` on both channels.
-
----
-
-## Remote Frames — The Two Decoded Words
-
-The remote was captured live (transmitter silenced) and each button decoded from the raw waveform.
-
-<p align="center">
-  <img src="images/la_remote_A.png" width="560" alt="Remote button A"/>
-  &nbsp;&nbsp;
-  <img src="images/la_remote_B.png" width="560" alt="Remote button B"/>
-</p>
-<p align="center">
-  <em>Left: button A · `0x613718` · data nibble `1000` · Right: button B · `0x613714` · data nibble `0100`</em>
-</p>
-
-| Source | 24-bit word | Address (C19..C0) | Data (D3..D0) |
-|---|---|---|---|
-| Arduino, generated | `0x02063C` | `0x02063` | `1100` |
-| Remote, button A | `0x613718` | `0x61371` | `1000` |
-| Remote, button B | `0x613714` | `0x61371` | `0100` |
-
-The address is identical across both remote buttons. Only the 4-bit data field changes — the 20 + 4 packet structure confirmed by measurement, not assumed.
-
-Button B was captured five consecutive times in one session (`captures/remote_B.sr`). All five frames decoded to `0x613714`. Button A was confirmed in `captures/remote_A.sr`.
-
----
-
-## Receiver Idle — What Noise Looks Like
-
-<p align="center">
-  <img src="images/la_rx_noise.png" width="600" alt="Receiver idle noise"/>
-</p>
-<p align="center">
-  <em>Receiver output with no carrier present — dense oscillation, not a frame. Antennas and a live transmitter are both required.</em>
-</p>
-
----
-
-## Protocol
-
-EV1527 is fixed-code OOK. One frame is 25 pulses — 24 data bits MSB first (20-bit address + 4-bit data) plus a sync pulse. Every bit occupies exactly 4t, so frame length is constant at 128t.
-
-| Element | HIGH | LOW | At t = 250 µs |
-|---|---|---|---|
-| sync | 1t | 31t | 250 µs / 7750 µs |
-| bit 0 | 1t | 3t | 250 µs / 750 µs |
-| bit 1 | 3t | 1t | 750 µs / 250 µs |
-
-The firmware emits: **24 data bits → sync → 10 ms gap**, then repeats. The post-sync gap measures 17.8 ms (31t + 10 ms), against the reference remote's 10.3–12.4 ms. The relay accepts it. A decoder that validates the gap against 31t ± 20 % may not. One-line fix documented in §4.1 of the work log.
-
----
-
-## Reproducing It
-
-1. Flash `firmware/ev1527_generator.ino` onto an Arduino Uno (output on D8).
-2. Scope CH1 on D8 — 10X probe **and** 10X in the channel menu. Use 500 µs/div for pulse widths, 10 ms/div for frame structure, rising-edge trigger at ~1.5 V.
-3. Wire transmitter DATA to D8, receiver DATA to the analyser. Fit a 17.3 cm wire on each ANT pad. Keep boards 0.5–1 m apart.
-4. Capture at 2 MHz. Find the frame boundary at the long LOW, then read each HIGH: over 500 µs is a 1.
-5. For the relay: 12 V to the board, put it in learn mode, transmit from the Arduino.
-
-Native PulseView captures are in `captures/` — reopen any of them and re-derive every timing independently.
-
----
-
-## Five Faults Found by Measurement
-
-| Fault | How it showed up | Fix |
+| Component | Model / Type | Role in Experiment |
 |---|---|---|
-| 32-bit loop in the reference sketch | 33 pulses per frame, not 25 | Loop `i = 23`, send low 24 bits |
-| 10X probe, 1X channel setting | 5 V logic read as 0.6 V | Set probe attenuation in CH1 menu |
-| Auto-measurements pixel-quantised | `+Wid 200 µs` at 10 ms/div | Measure at 500 µs/div or use cursors |
-| Sampling a 1 ms signal every 50 ms | Random 1/0 stream, 60 % ones | Measure widths, not levels |
-| One board cannot TX and RX at once | Every early receive test decoded noise | Capture with analyser while generator runs |
+| Microcontroller | Arduino Uno (ATmega328P, 16 MHz, 5 V logic) | Baseband pattern generator (GPIO D8) |
+| Oscilloscope | Rigol DS1054Z (50 MHz, 1 GSa/s, 10X probe) | Pulse width, amplitude, and duty-cycle verification |
+| RF Transmitter | FS1000A-class (433.92 MHz SAW resonator, OOK/ASK) | Modulates D8 baseband onto 433.92 MHz RF carrier |
+| RF Receiver | XD-RF-5V (433.92 MHz superheterodyne receiver) | Demodulates RF carrier to digital baseband (DATA pin) |
+| Logic Analyser | 8-channel USB analyser (Saleae-compatible, 2 MHz) | Dual-channel digital capture of TX (D8) and RX (D7) |
+| Antennas | 2 × 17.3 cm solid-core wire (quarter-wave monopoles) | Soldered to transmitter and receiver ANT pads |
+| Relay Receiver | 12 V single-channel learning receiver (Songle SRD-12VDC-SL-C) | Commercial decoder and relay actuation target |
+| Handheld Remote | 2-button EV1527 key fob (Buttons A and B) | Reference hardware for frame and timing comparison |
 
 ---
 
-## Repository Contents
+## Signal Flow
 
-| Path | Contents |
-|---|---|
-| `firmware/ev1527_generator.ino` | bit-banged generator, t = 250 µs, 24 bits |
-| `reference/Arduino_EV1527_1.txt` | task reference sketch — 32-bit loop, unmodified |
-| `captures/RX_TX_of_both_boards.sr` | sigrok session, 2 MHz, 200 000 samples, TX + RX |
-| `captures/tx_rx_run1,2,3.sr` | three RF-link capture runs (run3 has the single-bit error) |
-| `captures/remote_A.sr` / `remote_B.sr` | remote button A and B captures |
-| `docs/EV1527_Work_Log.md` | full work log — method, measurements, defects, status |
-| `images/` | 13 scope and analyser captures + hardware photographs |
-
----
-
-## Limitations
-
-- No photograph or video of the relay stage was taken. The result is recorded in writing in §7 of the work log.
-- Pairing persistence across a power cycle of the relay board itself was not separately verified.
-- Range was not characterised; the link was tested at bench distances.
-- The PulseView built-in OOK decoder is Manchester-based and does not apply to EV1527 pulse-width coding.
+```
+Arduino Uno (D8) ─── Baseband ───► FS1000A TX (433.92 MHz OOK)
+       │                                     │
+   Scope CH1                               Air link (17.3 cm wire antennas)
+   LA Probe 0 ("TX_D8")                     │
+                                            ▼
+                              XD-RF-5V RX (DATA out)
+                                     │
+                        ┌────────────┴────────────┐
+                        ▼                         ▼
+             LA Probe 1 ("RX_D7")         12 V Learning Relay
+             (Capture & Decode)           (Learn & Actuate)
+```
 
 ---
 
-## Reference
+## Protocol / Timing
 
-Task: Sanjeeb Mishra, Task-Based Learning Cohort 2 — *EV1527 waveform pattern generation using AFG and Arduino*.
-[github.com/SanjeebMishra/TaskBasedLearningCohort1/wiki/Task-Based-Learning-Cohort-2](https://github.com/SanjeebMishra/TaskBasedLearningCohort1/wiki/Task-Based-Learning-Cohort-2)
+EV1527 uses pulse-width modulation over On-Off Keying (OOK). Each frame consists of 25 pulses: 1 synchronization pulse followed by 24 data bits (20-bit address and 4-bit data), transmitted MSB first.
 
-K.S. Madhavkrishnan · November 2026
+| Element | Level Encoding | Nominal Duration ($t = 250\ \mu\text{s}$) | Measured Value | Category |
+|---|---|---|---|---|
+| Pulse unit ($t$) | — | 250 µs | 250.0 µs (+Width on D8) | Measured |
+| Bit 0 | 1t HIGH, 3t LOW | 250 µs HIGH, 750 µs LOW | 250.0 µs HIGH, 770.0 µs LOW | Measured |
+| Bit 1 | 3t HIGH, 1t LOW | 750 µs HIGH, 250 µs LOW | 752–758 µs HIGH, 254–260 µs LOW | Measured |
+| Bit Period | 4t total | 1000 µs (1.000 ms) | 1020 µs (1.020 ms) | Measured |
+| Sync Pulse | 1t HIGH, 31t LOW | 250 µs HIGH, 7750 µs LOW | 252 µs HIGH, 7750 µs nominal | Measured / Nominal |
+| Active Frame Length | 24 bits × 4t + 32t = 128t | 32.00 ms (calculated at nominal $t$) | ~32.25 ms (calculated from 1.020 ms bit period) | Calculated |
+| Inter-repeat Delay | Firmware delay | 10.00 ms (`delay(10)`) | 10.00 ms | Implemented |
+| Total Post-sync Gap | 31t LOW + 10 ms delay | 17.75 ms | 17.81 ms (17 810–17 816 µs) | Measured |
+| Frame Repetition Period | Active frame + post-sync gap | 42.00 ms nominal | ~42.4 ms | Measured |
+
+*Note: The 20 µs excess on the LOW duration is due to AVR `digitalWrite()` instruction overhead and `delayMicroseconds()` loop resolution.*
+
+---
+
+## Implementation
+
+The generator firmware is located at [`firmware/ev1527_generator.ino`](firmware/ev1527_generator.ino).
+
+- **Data word:** Configured as `0x3802063C`. The transmission loop sends the lower 24 bits (`0x02063C`), corresponding to 20-bit address `0x02063` and 4-bit data `1100` (`0xC`).
+- **Bit order:** Transmitted MSB first using `for (int i = 23; i >= 0; i--)`.
+- **Timing:** Implemented with `delayMicroseconds()` based on $T = 250\ \mu\text{s}$.
+- **Bursts:** Emits 4 repeated frames per cycle with a 10 ms delay between frames.
+
+---
+
+## Validation Results
+
+| Test Parameter | Intended / Reference | Measured / Observed Result | Validation Method |
+|---|---|---|---|
+| Baseband pulse width ($t$) | 250 µs | 250.0 µs HIGH, 770.0 µs LOW (bit 0) | Rigol DS1054Z auto-measure (500 µs/div) |
+| Pulses per frame | 25 (1 sync + 24 data) | 25 pulses | Logic analyser edge count (2 MHz) |
+| Transmitted word | `0x02063C` | `0x02063C` | Logic analyser TX_D8 capture decode |
+| Received word (RF link) | `0x02063C` | `0x02063C` | Logic analyser RX_D7 capture decode |
+| RX signal reproduction | Match TX pulses | 25 pulses replicated; ~25–30 µs latency; HIGH stretched 25–35 µs | Dual-channel capture (TX_D8 vs RX_D7) |
+| Remote Button A | 24-bit frame | `0x613718` (Address: `0x61371`, Data: `1000`, $t \approx 400\ \mu\text{s}$) | Logic analyser capture (`remote_A.sr`) |
+| Remote Button B | 24-bit frame | `0x613714` (Address: `0x61371`, Data: `0100`, $t \approx 400\ \mu\text{s}$) | Logic analyser capture (`remote_B.sr`, 5 runs identical) |
+| Relay actuation | Responds to learned code | Relay paired in learning mode and latched upon transmission | Observed physical contact switching |
+
+---
+
+## Debugging
+
+- **Sampling Aliasing:** Initial polling of receiver DATA with `digitalRead()` every 50 ms produced aliased random bits because the sampling rate was far below the 1 kHz baseband. Switched to pulse-width capture using a 2 MHz logic analyser.
+- **Probe Attenuation Mismatch:** Oscilloscope read 5 V logic as 0.6 V because the probe was physically set to 10X while the scope channel setting was 1X. Corrected probe setting in the scope menu to 10X.
+- **Screen Quantisation:** Auto-measurements at 10 ms/div quantised pulse widths to screen pixel boundaries (200 µs steps). Resolved by zooming the horizontal timebase to 500 µs/div for pulse measurements.
+- **Frame Length Clarification:** The supplied reference sketch looped over 32 bits (`i = 31` down to 0), generating 33 pulses. Inspection with the logic analyser revealed 32 data pulses. I adapted the loop to 24 bits (`i = 23` down to 0) to comply with standard 24-bit EV1527 framing.
+- **Single-MCU Contention:** Attempting to run transmitter and receiver code on a single Uno failed because receive sketches halted the transmission loop. Resolved by letting the Uno transmit continuously while capturing the receiver output with a standalone logic analyser.
+- **Receiver Idle Noise:** In the absence of a 433 MHz carrier, the superheterodyne receiver AGC raised gain, producing continuous hash. Adding quarter-wave antennas and placing modules ~0.5–1 m apart established stable baseband reproduction.
+
+---
+
+## Evidence & Files
+
+- **Complete Work Log:** [`docs/EV1527_Work_Log.md`](docs/EV1527_Work_Log.md) — Full technical notes, raw timing tables, and setup details.
+- **Detailed Wiki Page:** [`docs/wiki/EV1527-Baseband-Link-Decode-Relay.md`](docs/wiki/EV1527-Baseband-Link-Decode-Relay.md) — Complete experimental writeup.
+- **Firmware:** [`firmware/ev1527_generator.ino`](firmware/ev1527_generator.ino) — Active 24-bit generator sketch.
+- **Reference Code:** [`reference/Arduino_EV1527_1.txt`](reference/Arduino_EV1527_1.txt) — Task reference sketch.
+- **PulseView Captures:** [`captures/`](captures/) — Native `.sr` files (`RX_TX_of_both_boards.sr`, `tx_rx_run1.sr`, `tx_rx_run2.sr`, `tx_rx_run3.sr`, `remote_A.sr`, `remote_B.sr`).
+- **Instrument Images:** [`images/`](images/) — Oscilloscope screenshots, logic analyser traces, and hardware photos.
+
+---
+
+## Limitations / Notes
+
+- **Receiver Edge Distortion:** The superheterodyne receiver stretches HIGH pulses by 25–35 µs and exhibits a 25–30 µs propagation delay. Decoders must use threshold-based discrimination (e.g. threshold at 500 µs) rather than exact nominal widths.
+- **Post-sync Gap Length:** The firmware adds a 10 ms delay to the 31t sync LOW, resulting in an inter-frame gap of ~17.8 ms (compared to the remote's 10.3–12.4 ms). The test relay accepted this timing; decoders enforcing strict 31t ± 20% validation would require reducing the delay to `delay(4)`.
+- **Benchtop Distance Only:** RF testing was conducted at bench distances (0.5–1 m). Sensitivity, maximum range, and multi-path fading were not evaluated.
+- **RF Spectrum:** No RF spectrum analyser was available; carrier frequency accuracy, harmonic suppression, and modulation bandwidth were not measured.
+- **Scope:** Validates baseband generation, wireless demodulation, software decoding, and relay operation. Does not constitute RF compliance certification.
+
+---
+
+## Conclusion
+
+I generated a 24-bit EV1527 baseband signal on an Arduino Uno at $t = 250\ \mu\text{s}$ and verified pulse timings on an oscilloscope. The signal was successfully transmitted across a 433.92 MHz ASK/OOK link, captured with a logic analyser, and decoded to `0x02063C`. Comparing against a commercial remote confirmed the 20-bit address and 4-bit data framing. Finally, a commercial 12 V learning relay was taught the generated code and responded reliably to the transmission.
