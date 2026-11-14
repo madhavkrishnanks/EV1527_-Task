@@ -25,9 +25,9 @@ I used the standard 433.92 MHz transmitter/receiver pair specified for the task 
 | Microcontroller | Arduino Uno (ATmega328P, 16 MHz, 5 V logic) | Baseband pattern generator (GPIO D8) |
 | Oscilloscope | Rigol DS1054Z (50 MHz, 1 GSa/s, 10X probe) | Pulse width, amplitude, and duty-cycle verification |
 | Transmitter Module | FS1000A-class (433.92 MHz SAW oscillator, 5 V) | OOK modulator driven by pin D8 |
-| Receiver Module | XD-RF-5V (433.92 MHz superheterodyne, 5 V) | Demodulator with digital DATA output |
+| Receiver Module | XD-RF-5V (433.92 MHz superregenerative, 5 V) | Demodulator with digital DATA output |
 | Logic Analyser | 8-channel USB analyser (Saleae-compatible, 2 MHz) | Dual-channel digital capture of TX (D8) and RX (D7) |
-| Antennas | 2 × 17.3 cm solid copper wire | Quarter-wave monopoles for 433.92 MHz ($300 / 433.92 / 4 \approx 17.28\ \text{cm}$) |
+| Antennas | 2 × 17.3 cm solid copper wire | Quarter-wave wire whips for 433.92 MHz ($300 / 433.92 / 4 \approx 17.28\ \text{cm}$) |
 | Learning Relay | 12 V single-channel board (Songle SRD-12VDC-SL-C) | EV1527 decoder and relay actuation target |
 | Handheld Remote | 2-button EV1527 key fob (Buttons A and B) | Reference commercial frame source |
 
@@ -226,12 +226,11 @@ In `captures/tx_rx_run3.sr`, two of the received frames decoded cleanly to `0x02
 The captured waveforms were decoded using both manual inspection and software analysis.
 
 ### Decoding Rule
-1. Locate the frame start by identifying the long post-sync LOW gap (> 3 ms).
-2. The pulse immediately following the long LOW is the sync pulse (1t HIGH).
-3. For each of the subsequent 24 pulses:
+1. Locate the frame boundary by identifying the long post-sync LOW gap (> 3 ms).
+2. The 24 pulses immediately following the long gap are the data bits, evaluated MSB first:
    - If HIGH width < 500 µs: decode as bit `0`.
    - If HIGH width > 500 µs: decode as bit `1`.
-4. Assemble bits MSB first.
+3. The 25th pulse preceding the next long gap is the sync pulse (1t HIGH, 31t LOW); evaluated against the 500 µs threshold, its 250 µs HIGH appears as a trailing bit '0'.
 
 ### Manual Decode
 Reading the 24 pulse widths from the logic analyser trace yields:
@@ -241,7 +240,7 @@ Hex:        0     2     0     6     3     C
 ```
 The decoded value is `0x02063C`.
 
-*Note on 25th character:* If 25 pulses are read sequentially, a trailing 0 appears because the sync pulse of the following frame is 1t HIGH followed by a long LOW, resembling a bit 0. True frame boundaries must always be established by identifying the long sync gap.
+*Note on 25th pulse:* Reading 25 pulses sequentially yields a 25th character (trailing 0) because the sync pulse of that frame is a 250 µs HIGH followed by a long LOW gap, which resembles a bit 0 under a 500 µs threshold. Frame boundaries must always be established by identifying the long sync gap.
 
 ### Programmatic Decode
 A Python script was used to process the raw 200 000 samples from the `.sr` files:
@@ -305,7 +304,7 @@ The relay stage was tested using the 12 V single-channel EV1527 learning receive
 | 4 | Disconnected USB power from Arduino | Transmission ceased; relay opened |
 | 5 | Reconnected USB power to Arduino | Transmission resumed; relay clicked closed and held |
 
-The learning relay successfully learned the generated code (`0x02063C`) and responded when the generated frame was transmitted again. The relay remained closed during the burst rather than chattering on individual frames. Disconnecting and reconnecting transmitter power verified that the relay actively responds to the generated baseband transmission. Both the remote and the Arduino remained stored in the relay's memory and could actuate the board independently.
+The learning relay successfully learned the generated code (`0x02063C`) and responded when the generated frame was transmitted again. The board operated in momentary mode with retriggering: repeated frames arriving every ~42 ms continuously retriggered the internal dropout timer, holding the relay closed without contact chatter between frames, and opening when transmission ceased. Disconnecting and reconnecting transmitter power verified that the relay actively responds to the generated baseband transmission. Both the remote and the Arduino remained stored in the relay's memory and could actuate the board independently.
 
 ---
 
@@ -352,7 +351,7 @@ During the development of this setup, several initial approaches failed before b
   H=4195 us   L=6289 us
   H=704 us    L=4149 us
   ```
-- **Why it was invalid:** Superheterodyne receivers with automatic gain control (AGC) produce random thermal noise when no carrier is present.
+- **Why it was invalid:** In the absence of an RF carrier, the unsquelched receiver and adaptive data slicer amplify background thermal noise into continuous digital switching.
 - **What was changed:** Added 17.3 cm antennas and powered the transmitter during all capture tests.
 - **What worked afterwards:** Receiver reproduced clean frames matching the transmitter output.
 
