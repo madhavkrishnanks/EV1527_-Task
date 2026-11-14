@@ -32,13 +32,16 @@ Every number in this document was produced by the firmware and confirmed by an i
 
 Module naming: the transmitter is an FS1000A-class board (metal SAW can, DATA / VCC / GND, ANT pad); the receiver silkscreen reads **XD-RF-5V**, a superheterodyne module. The pair is sold under several names, including WL101/WL102. They are the standard 433.92 MHz ASK/OOK pair the task specifies; no substitution was made.
 
-![FS1000A-class transmitter and XD-RF-5V receiver as used](images/hw_modules.png)
+<img src="images/hw_modules.png" width="400" alt="FS1000A-class transmitter and XD-RF-5V receiver as used"/>
+
 *FS1000A-class transmitter and XD-RF-5V receiver as used*
 
-![EV1527 12 V learning relay receiver, Songle SRD-12VDC-SL-C, 5-way terminal](images/hw_relay.png)
+<img src="images/hw_relay.png" width="400" alt="EV1527 12 V learning relay receiver, Songle SRD-12VDC-SL-C, 5-way terminal"/>
+
 *EV1527 12 V learning relay receiver, Songle SRD-12VDC-SL-C, 5-way terminal*
 
-![Two-button EV1527 remote supplied with the relay board](images/hw_remote.png)
+<img src="images/hw_remote.png" width="400" alt="Two-button EV1527 remote supplied with the relay board"/>
+
 *Two-button EV1527 remote supplied with the relay board*
 
 ### Signal chain as built
@@ -184,7 +187,8 @@ Both properties of the transmitted frame — the 32-bit loop and the data-before
 
 The +20 µs on the LOW is the execution time of `digitalWrite` plus `delayMicroseconds` rounding; it lands in the LOW because the next HIGH is only asserted after the LOW delay returns.
 
-![CH1 on D8 at 500 µs/div: +Width 250.0 µs, −Width 770.0 µs](images/scope_bits.png)
+<img src="images/scope_bits.png" width="600" alt="CH1 on D8 at 500 µs/div: +Width 250.0 µs, −Width 770.0 µs, period 1.020 ms"/>
+
 *CH1 on D8 at 500 µs/div: +Width 250.0 µs, −Width 770.0 µs, period 1.020 ms*
 
 ### 5.2 Frame structure — 5 ms/div and 10 ms/div
@@ -194,10 +198,12 @@ The +20 µs on the LOW is the execution time of `digitalWrite` plus `delayMicros
 | Pulses per frame | 25 (1 sync + 24 data) | 25 |
 | Frame length | ≈ 24 ms of data bits + sync gap | 24 × 4t + 32t = 32 ms |
 
-![CH1 on D8 at 10 ms/div: frame bursts separated by the sync gap](images/scope_frame.png)
+<img src="images/scope_frame.png" width="600" alt="CH1 on D8 at 10 ms/div: frame bursts separated by the sync gap"/>
+
 *CH1 on D8 at 10 ms/div: frame bursts separated by the sync gap*
 
-![CH1 on D8 at 5 ms/div: 25 pulses in one frame](images/scope_25_pulses.png)
+<img src="images/scope_25_pulses.png" width="600" alt="CH1 on D8 at 5 ms/div: 25 pulses in one frame"/>
+
 *CH1 on D8 at 5 ms/div: 25 pulses in one frame*
 
 ### 5.3 Measurement caveat — automatic measurements are pixel-quantised
@@ -226,10 +232,12 @@ The measured frame period of 42.4 ms is consistent with the firmware: 24 bits ×
 
 **The link is not error-free, and that is worth stating.** In the third archived run, two of the received frames decoded to `0x02063C` and one decoded to `0x02031E` — a single bit in the wrong place, from a pulse that the receiver stretched past the decision threshold. Two of three frames correct is typical for these modules at bench distance with no error handling in the protocol. It is also exactly why EV1527 transmitters repeat every frame and why receivers require several identical frames before acting: repetition is the error-correction mechanism.
 
-![TX_D8 and RX_D7 at 2 MHz over 100 ms: two frames, 25 pulses each on both channels](images/la_tx_rx_100ms.png)
+<img src="images/la_tx_rx_100ms.png" width="600" alt="TX_D8 and RX_D7 at 2 MHz over 100 ms: two frames, 25 pulses each on both channels"/>
+
 *TX_D8 and RX_D7 at 2 MHz over 100 ms: two frames, 25 pulses each on both channels*
 
-![Same link zoomed: the receiver reproduces the frame pulse for pulse](images/la_tx_rx_zoom.png)
+<img src="images/la_tx_rx_zoom.png" width="600" alt="Same link zoomed: the receiver reproduces the frame pulse for pulse"/>
+
 *Same link zoomed: the receiver reproduces the frame pulse for pulse*
 
 ### 5.5 Decode from the raw capture
@@ -282,11 +290,13 @@ The address is identical across both buttons and only the 4-bit data field chang
 
 Two consequences. First, the remote's word is **not** `0x02063C` — it carries its own factory address, which is the expected result and the reason the comparison is worth making. Second, the remote's t (≈400 µs) is not the firmware's 250 µs: each encoder's oscillator sets its own t, and a receiver must tolerate that spread rather than assume a value.
 
-![Remote button A, one frame zoomed](images/la_remote_A.png)
-*Remote button A, one frame zoomed*
+<img src="images/la_remote_A.png" width="400" alt="Remote button A, one frame zoomed"/>
 
-![Remote button B, one frame zoomed](images/la_remote_B.png)
-*Remote button B, one frame zoomed*
+*Remote button A, one frame zoomed — decoded `0x613718`, address `0x61371`, data nibble `1000`*
+
+<img src="images/la_remote_B.png" width="400" alt="Remote button B, one frame zoomed"/>
+
+*Remote button B, one frame zoomed — decoded `0x613714`, address `0x61371`, data nibble `0100`*
 
 ---
 
@@ -327,10 +337,12 @@ No photograph or video of the relay stage was taken. The result is recorded in w
 
 **8.1 32-bit loop instead of 24.** The task's reference sketch (`reference/Arduino_EV1527_1.txt`) loops `for (int i = 31; i >= 0; i--)`, transmitting 32 data bits — 33 pulses per frame instead of 25. Counting pulses on the analyser (32 detected) exposed it. Fixed to `i = 23`, which is what makes the transmitted word `0x02063C`. The defect was inherited from the reference, not introduced during this work.
 
-![Logic analyser on D8 before the fix: 32 data bits per frame](images/la_32_bits_before_fix.png)
+<img src="images/la_32_bits_before_fix.png" width="400" alt="Logic analyser on D8 before the fix: 32 data bits per frame"/>
+
 *Logic analyser on D8 before the fix: 32 data bits per frame*
 
-![Logic analyser on D8 after the fix: 25 pulses per frame](images/la_25_pulses.png)
+<img src="images/la_25_pulses.png" width="400" alt="Logic analyser on D8 after the fix: 25 pulses per frame"/>
+
 *Logic analyser on D8 after the fix: 25 pulses per frame*
 
 **8.2 Probe attenuation mismatch.** An early capture showed a 5 V logic signal as 0.6 divisions at 1 V/div, i.e. the instrument read 0.6 V. A 10X probe was connected with CH1 still set to 1X. Timing was unaffected; every amplitude reading was 10× wrong. Corrected in CH1 → Probe → 10X.
@@ -354,7 +366,8 @@ None of these is a legal EV1527 width, and the set is internally inconsistent. T
 
 **8.5 Receiver idle output is noise.** With no carrier present the receiver outputs a continuous fast oscillation — on the analyser, both a high and a low inside a single pixel column across most of the screen. It is not a frame and cannot be decoded. Antennas on both modules, 0.5–1 m separation and a continuous transmission are required before the output resembles the transmitted waveform.
 
-![Receiver idle output: dense oscillation with no relation to the frame](images/la_rx_noise.png)
+<img src="images/la_rx_noise.png" width="400" alt="Receiver idle output: dense oscillation with no relation to the frame"/>
+
 *Receiver idle output: dense oscillation with no relation to the frame*
 
 **8.6 Generic protocol decoders do not apply.** PulseView's built-in OOK decoder is Manchester-based and reports "Not Manchester encoded or wrong preamble" on a valid EV1527 frame. EV1527 is pulse-width coded, so that decoder cannot succeed. Decoding was done by hand and in software from the raw capture instead.
@@ -386,4 +399,3 @@ None of these is a legal EV1527 width, and the set is internally inconsistent. T
 ---
 
 See also: [README.md](https://github.com/madhavkrishnanks/EV1527_RF_Link/blob/main/README.md) · [Task reference](https://github.com/SanjeebMishra/TaskBasedLearningCohort1/wiki/Task-Based-Learning-Cohort-2)
-
